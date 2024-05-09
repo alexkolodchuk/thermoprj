@@ -10,69 +10,74 @@
     <height>854</height>
    </rect>
   </property>
+  <property name="font">
+   <font>
+    <pointsize>16</pointsize>
+   </font>
+  </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
   <widget class="QPushButton" name="updateButton">
    <property name="geometry">
     <rect>
-     <x>420</x>
-     <y>20</y>
-     <width>171</width>
-     <height>91</height>
+     <x>370</x>
+     <y>10</y>
+     <width>311</width>
+     <height>41</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+    </font>
    </property>
    <property name="text">
-    <string>Обновить</string>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="resourcesBox">
-   <property name="geometry">
-    <rect>
-     <x>680</x>
-     <y>30</y>
-     <width>301</width>
-     <height>61</height>
-    </rect>
+    <string>Обновить список устройств</string>
    </property>
   </widget>
   <widget class="QSpinBox" name="currentBox">
    <property name="geometry">
     <rect>
-     <x>50</x>
-     <y>20</y>
-     <width>181</width>
-     <height>131</height>
+     <x>270</x>
+     <y>110</y>
+     <width>171</width>
+     <height>51</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+    </font>
    </property>
   </widget>
   <widget class="QLineEdit" name="minVoltage">
    <property name="geometry">
     <rect>
-     <x>380</x>
-     <y>150</y>
-     <width>241</width>
-     <height>22</height>
+     <x>570</x>
+     <y>140</y>
+     <width>81</width>
+     <height>31</height>
     </rect>
    </property>
   </widget>
   <widget class="QLineEdit" name="maxVoltage">
    <property name="geometry">
     <rect>
-     <x>710</x>
-     <y>150</y>
-     <width>241</width>
-     <height>22</height>
+     <x>730</x>
+     <y>140</y>
+     <width>81</width>
+     <height>31</height>
     </rect>
    </property>
   </widget>
   <widget class="QPushButton" name="startButton">
    <property name="geometry">
     <rect>
-     <x>460</x>
-     <y>200</y>
-     <width>91</width>
-     <height>71</height>
+     <x>510</x>
+     <y>190</y>
+     <width>111</width>
+     <height>51</height>
     </rect>
    </property>
    <property name="text">
@@ -82,11 +87,253 @@
   <widget class="QWidget" name="graph" native="true">
    <property name="geometry">
     <rect>
-     <x>250</x>
+     <x>50</x>
      <y>290</y>
-     <width>541</width>
-     <height>531</height>
+     <width>941</width>
+     <height>471</height>
     </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>260</x>
+     <y>70</y>
+     <width>221</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+     <weight>50</weight>
+     <bold>false</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>Сила (источник тока):</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_3">
+   <property name="geometry">
+    <rect>
+     <x>50</x>
+     <y>90</y>
+     <width>171</width>
+     <height>81</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>20</pointsize>
+     <weight>75</weight>
+     <bold>true</bold>
+     <underline>true</underline>
+    </font>
+   </property>
+   <property name="text">
+    <string>Настройка</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_4">
+   <property name="geometry">
+    <rect>
+     <x>580</x>
+     <y>100</y>
+     <width>101</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Минимум</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_5">
+   <property name="geometry">
+    <rect>
+     <x>550</x>
+     <y>60</y>
+     <width>451</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Изменение температуры терморегулятора:</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_6">
+   <property name="geometry">
+    <rect>
+     <x>740</x>
+     <y>100</y>
+     <width>101</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Максимум</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_7">
+   <property name="geometry">
+    <rect>
+     <x>920</x>
+     <y>100</y>
+     <width>101</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Шаг</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="maxVoltage_2">
+   <property name="geometry">
+    <rect>
+     <x>900</x>
+     <y>140</y>
+     <width>71</width>
+     <height>31</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_8">
+   <property name="geometry">
+    <rect>
+     <x>450</x>
+     <y>120</y>
+     <width>31</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+     <weight>50</weight>
+     <bold>false</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>мA</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_9">
+   <property name="geometry">
+    <rect>
+     <x>660</x>
+     <y>140</y>
+     <width>31</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+     <weight>50</weight>
+     <bold>false</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>°К</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_10">
+   <property name="geometry">
+    <rect>
+     <x>820</x>
+     <y>140</y>
+     <width>31</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+     <weight>50</weight>
+     <bold>false</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>°К</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_11">
+   <property name="geometry">
+    <rect>
+     <x>980</x>
+     <y>140</y>
+     <width>31</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>16</pointsize>
+     <weight>50</weight>
+     <bold>false</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>°К</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="debug">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>810</y>
+     <width>481</width>
+     <height>31</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>230</x>
+     <y>780</y>
+     <width>91</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Отладка</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="applyButton">
+   <property name="geometry">
+    <rect>
+     <x>380</x>
+     <y>190</y>
+     <width>121</width>
+     <height>51</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Применить</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="output">
+   <property name="geometry">
+    <rect>
+     <x>560</x>
+     <y>810</y>
+     <width>461</width>
+     <height>31</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_12">
+   <property name="geometry">
+    <rect>
+     <x>750</x>
+     <y>780</y>
+     <width>181</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Показания</string>
    </property>
   </widget>
  </widget>
