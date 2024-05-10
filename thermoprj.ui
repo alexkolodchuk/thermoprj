@@ -139,14 +139,14 @@
         </property>
         <property name="minimumSize">
          <size>
-          <width>200</width>
-          <height>70</height>
+          <width>275</width>
+          <height>100</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>70</height>
+          <height>100</height>
          </size>
         </property>
         <property name="font">
@@ -238,6 +238,9 @@
               <family>Consolas</family>
               <pointsize>18</pointsize>
              </font>
+            </property>
+            <property name="decimals">
+             <number>2</number>
             </property>
             <property name="maximum">
              <double>9999.989999999999782</double>
@@ -401,6 +404,9 @@
                   <pointsize>18</pointsize>
                  </font>
                 </property>
+                <property name="decimals">
+                 <number>3</number>
+                </property>
                 <property name="maximum">
                  <double>9999.989999999999782</double>
                 </property>
@@ -515,6 +521,9 @@
                   <pointsize>18</pointsize>
                  </font>
                 </property>
+                <property name="decimals">
+                 <number>3</number>
+                </property>
                 <property name="maximum">
                  <double>9999.989999999999782</double>
                 </property>
@@ -628,6 +637,9 @@
                   <family>Consolas</family>
                   <pointsize>18</pointsize>
                  </font>
+                </property>
+                <property name="decimals">
+                 <number>3</number>
                 </property>
                 <property name="maximum">
                  <double>9999.989999999999782</double>

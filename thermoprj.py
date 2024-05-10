@@ -11,7 +11,6 @@ from matplotlib.figure import Figure
 
 # В этих переменных будут храниться адреса устройств
 THERMO_ADDRESS = 'Температурный контроллер ТС322'
-CURRENT_ADDRESS = 'Источник тока Keysight N5700'
 VOLTAGE_ADDRESS = 'Вольтметр 34401a'
 
 
@@ -49,15 +48,23 @@ class Project(QMainWindow):
         '''Включение/выключение отрисовки графика ρ(Т).'''
         if checked:
             # Подключение устройств
-            try:
-                thermo = rm.open_resource(THERMO_ADDRESS)
-                current = rm.open_resource(CURRENT_ADDRESS)
-                voltage = rm.open_resource(VOLTAGE_ADDRESS)
-            except (pyvisa.errors.VisaIOError, AttributeError):
-                self.print('[Ошибка] Неверно указаны адреса инструментов. \
-Настройте их в "Настройка устройств".')
-                self.ui.startButton.setChecked(False)
-                return
+            #try:
+            voltage = rm.open_resource(VOLTAGE_ADDRESS)
+            print('thermo:', THERMO_ADDRESS.encode())
+            print('voltage:', VOLTAGE_ADDRESS)
+            thermo = rm.open_resource(THERMO_ADDRESS)
+            print(1)
+            thermo.baud_rate = 9600
+            thermo.data_bits = 8
+            print(1)
+            thermo.stop_bits = 1
+            thermo.parity = None
+            print(1)
+            #except (pyvisa.errors.VisaIOError, AttributeError):
+                #self.print('[Ошибка] Неверно указаны адреса инструментов. \
+#Настройте их в "Настройка устройств".')
+                #self.ui.startButton.setChecked(False)
+                #return
             
             self.ui.startButton.setText('Стоп') # Переключение кнопки
             
@@ -68,7 +75,7 @@ class Project(QMainWindow):
             temp_step: float = self.ui.step.value()
             
             # Установка выходного тока
-            current.write(f"source:current:level:imm:amp {current_now:1.1f}")
+            #current.write(f"source:current:level:imm:amp {current_now:1.1f}")
 
             if temp_step > max_temp-min_temp:
                 self.print('[Ошибка] Шаг больше отрезка.')
@@ -82,7 +89,7 @@ class Project(QMainWindow):
                 self.print('[Ошибка] Деление на 0.')
                 self.ui.startButton.setChecked(False)
                 return
-            eps = 0.005
+            eps = 0.1
             volt_sp = np.array([])
             temp_sp = np.array([])
             resistance_sp = np.array([])
@@ -98,6 +105,7 @@ class Project(QMainWindow):
                 # 4. Вычислить сопротивление
                 if not self.drawing:
                     break
+                print(1)
                 thermo.write(f'pid[1]:temp:target {i:3.3f}')
                 
                 temp_now = thermo.query('measure[1]:temp?')
@@ -151,15 +159,12 @@ class SettingsWindow(QMainWindow):
         self.ui.resources1.addItems(resources)
         self.ui.resources2.clear()
         self.ui.resources2.addItems(resources)
-        self.ui.resources3.clear()
-        self.ui.resources3.addItems(resources)
         app.setOverrideCursor(Qt.CursorShape.ArrowCursor)
     
     def save_changes(self):
-        global THERMO_ADDRESS, CURRENT_ADDRESS, VOLTAGE_ADDRESS
-        THERMO_ADDRESS = self.ui.resources1.currentText
-        CURRENT_ADDRESS = self.ui.resources2.currentText
-        VOLTAGE_ADDRESS = self.ui.resources3.currentText
+        global THERMO_ADDRESS, VOLTAGE_ADDRESS
+        THERMO_ADDRESS = self.ui.resources1.currentText()
+        VOLTAGE_ADDRESS = self.ui.resources2.currentText()
         self.close()
 
 if __name__ == '__main__':
