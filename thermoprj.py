@@ -3,16 +3,16 @@ import numpy as np
 from time import sleep
 from sys import argv
 from PyQt5.QtWidgets import QMainWindow, QApplication
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.uic import loadUi
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+import threading
 
 # В этих переменных будут храниться адреса устройств
-THERMO_ADDRESS = 'Температурный контроллер ТС322'
+THERMO_ADDRESS = 'ASRL4::INSTR'
 VOLTAGE_ADDRESS = 'Вольтметр 34401a'
-
 
 rm = pyvisa.ResourceManager()
 app: QApplication = None
@@ -21,8 +21,11 @@ class Project(QMainWindow):
     '''
     Главное окно программы.
     '''
+    signal = pyqtSignal()
+
     def __init__(self):
         super().__init__()
+        self.file = open('data.txt', 'w')
         self.ui = loadUi('thermoprj.ui', self)
         self.ui.settingsButton.clicked.connect(self.open_settings)
         self.ui.startButton.toggled.connect(self.start_or_stop)
@@ -43,99 +46,117 @@ class Project(QMainWindow):
     def open_settings(self):
         settings = SettingsWindow()
         settings.show()
-    
+
     def start_or_stop(self, checked):
         '''Включение/выключение отрисовки графика ρ(Т).'''
         if checked:
-            # Подключение устройств
-            #try:
-            voltage = rm.open_resource(VOLTAGE_ADDRESS)
-            print('thermo:', THERMO_ADDRESS.encode())
-            print('voltage:', VOLTAGE_ADDRESS)
-            thermo = rm.open_resource(THERMO_ADDRESS)
-            print(1)
-            thermo.baud_rate = 9600
-            thermo.data_bits = 8
-            print(1)
-            thermo.stop_bits = 1
-            thermo.parity = None
-            print(1)
-            #except (pyvisa.errors.VisaIOError, AttributeError):
-                #self.print('[Ошибка] Неверно указаны адреса инструментов. \
-#Настройте их в "Настройка устройств".')
-                #self.ui.startButton.setChecked(False)
-                #return
-            
-            self.ui.startButton.setText('Стоп') # Переключение кнопки
-            
-            # Сохранение заданных параметров
-            current_now: float = self.ui.current.value()
-            min_temp: float = self.ui.min.value()
-            max_temp: float = self.ui.max.value()
-            temp_step: float = self.ui.step.value()
-            
-            # Установка выходного тока
-            #current.write(f"source:current:level:imm:amp {current_now:1.1f}")
-
-            if temp_step > max_temp-min_temp:
-                self.print('[Ошибка] Шаг больше отрезка.')
-                self.ui.startButton.setChecked(False)
-                return
-
-            # Инициализация начальных массивов (для физических данных)
-            try:
-                temps = np.arange(min_temp, max_temp, temp_step)
-            except ZeroDivisionError:
-                self.print('[Ошибка] Деление на 0.')
-                self.ui.startButton.setChecked(False)
-                return
-            eps = 0.1
-            volt_sp = np.array([])
-            temp_sp = np.array([])
-            resistance_sp = np.array([])
-            
-            # Создание пустого графика
-            self.graph, = self.canvas.axes.plot(temp_sp, resistance_sp)
-            
-            self.drawing = True
-            for i in temps:
-                # 1. Задать целевую температуру на термоконтроллер
-                # 2. Подождать, пока она не установится
-                # 3. Замерить напряжение на вольтметре
-                # 4. Вычислить сопротивление
-                if not self.drawing:
-                    break
-                print(1)
-                thermo.write(f'pid[1]:temp:target {i:3.3f}')
-                
-                temp_now = thermo.query('measure[1]:temp?')
-                while abs(temp_now - i) >= eps:
-                    sleep(0.1)
-                    temp_now = thermo.query('measure[1]:temp?')
-                volts = voltage.query('read?')
-                temp_sp = np.append(temp_sp, temp_now)
-                volt_sp = np.append(volt_sp, volts)
-                resistance = volts / current_now
-                resistance_sp = np.append(resistance_sp, resistance)
-                self.print(f'[ДАННЫЕ] {volts:.3f} В, {temp_now:.3f} °К, {resistance:.3f} Ом')
-                
-                # Рисование графика
-                self.graph.set_data(temp_sp, resistance_sp)
-                self.canvas.draw()
-                self.canvas.flush_events()
-                xsize = max(temp_sp)-min(temp_sp)
-                self.canvas.axes.set_xlim(min(temp_sp)-xsize*0.1, max(temp_sp)+xsize*0.1)
-                ysize = max(resistance_sp)-min(resistance_sp)
-                self.canvas.axes.set_ylim(min(resistance_sp)-ysize*0.1, max(resistance_sp)+ysize*0.1)
-            
+            self.start()
+        else:  # Остановка
             self.ui.startButton.setText('Запуск')
+            self.drawing = False
+
+    @pyqtSlot()
+    def start(self):
+        try:
+            print('connecting')
+            self.signal.connect(self.updating_graph)
+        except Exception as e:
+            print(e)
+            return
+
+        # Подключение устройств
+        try:
+            print('connecting devices')
+            self.voltage = rm.open_resource(VOLTAGE_ADDRESS)
+
+            self.thermo = rm.open_resource(THERMO_ADDRESS)
+        except (pyvisa.errors.VisaIOError, AttributeError):
+            self.print('[Ошибка] Неверно указаны адреса инструментов. \
+Настройте их в "Настройка устройств".')
             self.ui.startButton.setChecked(False)
-            self.drawing = False
-        
-        else: # Остановка
-            self.ui.startButton.setText('Запуск')
-            self.drawing = False
-        
+            return
+
+        self.ui.startButton.setText('Стоп') # Переключение кнопки
+
+        # Сохранение заданных параметров
+        self.current_now: float = self.ui.current.value()
+        min_temp: float = self.ui.min.value()
+        max_temp: float = self.ui.max.value()
+        temp_step: float = self.ui.step.value()
+
+        # Установка выходного тока
+        #current.write(f"source:current:level:imm:amp {current_now:1.1f}")
+
+        if temp_step > max_temp-min_temp:
+            self.print('[Ошибка] Шаг больше отрезка.')
+            self.ui.startButton.setChecked(False)
+            return
+
+        # Инициализация начальных массивов (для физических данных)
+        try:
+            self.temps = np.arange(min_temp, max_temp, temp_step)
+        except ZeroDivisionError:
+            self.print('[Ошибка] Деление на 0.')
+            self.ui.startButton.setChecked(False)
+            return
+        self.eps = 2000
+        self.volt_sp = np.array([])
+        self.temp_sp = np.array([])
+        self.resistance_sp = np.array([])
+
+        # Создание пустого графика
+        self.graph, = self.canvas.axes.plot(self.temp_sp, self.resistance_sp)
+
+        self.drawing = True
+        print('starting thread')
+        thread = threading.Thread(target=self.iterative_measuring, daemon=True)
+        thread.start()
+
+    def iterative_measuring(self):
+        for i in self.temps:
+            # 1. Задать целевую температуру на термоконтроллер
+            # 2. Подождать, пока она не установится
+            # 3. Замерить напряжение на вольтметре
+            # 4. Вычислить сопротивление
+            if not self.drawing:
+                break
+            self.thermo.write(f'pid4:temp:targ {i:3.3f}')
+            temp_now = float(self.thermo.query('meas:temp?'))
+            while abs(temp_now - i) >= self.eps:
+                sleep(0.5)
+                temp_now = float(self.thermo.query('meas:temp?'))
+                print(temp_now)
+
+            print('emitting signal')
+            self.signal.emit()
+            sleep(2)
+
+        self.ui.startButton.setText('Запуск')
+        self.ui.startButton.setChecked(False)
+        self.drawing = False
+
+    def updating_graph(self):
+        temp_now = float(self.thermo.query('meas:temp?'))
+        volts = float(self.voltage.query('read?'))*1000
+        self.temp_sp = np.append(self.temp_sp, temp_now)
+        self.volt_sp = np.append(self.volt_sp, volts)
+        resistance = volts / self.current_now
+        self.resistance_sp = np.append(self.resistance_sp, resistance)
+        self.print(f'[ДАННЫЕ] {volts:.3f} В, {temp_now:.3f} °К, {resistance:.3f} Ом')
+
+        print('drawing')
+        # Рисование графика
+        self.graph.set_data(self.temp_sp, self.resistance_sp)
+        self.canvas.draw()
+        self.canvas.flush_events()
+        xsize = max(max(self.temp_sp) - min(self.temp_sp), 0.0001)
+        self.canvas.axes.set_xlim(min(self.temp_sp) - xsize * 0.1, max(self.temp_sp) + xsize * 0.1)
+        ysize = max(max(self.resistance_sp) - min(self.resistance_sp), 0.0001)
+        self.canvas.axes.set_ylim(min(self.resistance_sp) - ysize * 0.1, max(self.resistance_sp) + ysize * 0.1)
+
+    def __del__(self):
+        self.file.close()
+
 class MplCanvas(FigureCanvasQTAgg):
     '''Собственный холст Matplotlib.'''
     def __init__(self):
@@ -172,3 +193,6 @@ if __name__ == '__main__':
     window = Project()
     window.show()
     exit(app.exec_())
+
+# Cryotel,Model\s311\sTemperature\sController,SN00135,2.7.4\r\n
+# Prist,V7-78/1,TW00011505,03.07-01-04
