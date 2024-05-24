@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: UTF8 -*-
+import random
 
 # This file is part of thermoprj.
 #
@@ -29,7 +30,7 @@ from matplotlib.figure import Figure
 
 # Это - дефолтные названия устройств (то, что они возвращают на *IDN?)
 # В случае отсутствия файла настроек эти данные загружаются туда
-DEFAULT_THERMO_NAME = 'Cryotel,Model\s311\sTemperature\sController,SN00135,2.7.4\r\n'
+DEFAULT_THERMO_NAME = 'Cryotel,Model 312 Temperature Controller,SN00136,2.7.4\r\n'
 DEFAULT_VOLTAGE_NAME = 'Prist,V7-78/1,TW00011505,03.07-01-04'
 
 SETTINGS_FILENAME = 'thermoprj_settings.txt'
@@ -38,21 +39,24 @@ FSTRING_FOR_DATETIME = '%Y/%m/%d-%H:%M:%S.%f'
 
 rm = pyvisa.ResourceManager()
 app: QApplication = None
+
     
 # Работа с файлом настроек
 def retrieve_settings() -> dict:
     try:
-        with open(SETTINGS_FILENAME, encoding='utf-8') as f:
-            text = f.read().split('\n')
+        with open(SETTINGS_FILENAME, mode='rb') as f:
+            text = f.read().decode().split('\n;;;\n')
             return {'thermo': text[0], 'voltage': text[1]}
     except (FileNotFoundError, KeyError, IndexError, UnicodeDecodeError):
-        with open(SETTINGS_FILENAME, mode='w', encoding='utf-8') as f:
-            f.write(DEFAULT_THERMO_NAME+'\n'+DEFAULT_VOLTAGE_NAME)
+        with open(SETTINGS_FILENAME, mode='wb') as f:
+            f.write((DEFAULT_THERMO_NAME+'\n;;;\n'+DEFAULT_VOLTAGE_NAME).encode())
         return {'thermo': DEFAULT_THERMO_NAME, 'voltage': DEFAULT_VOLTAGE_NAME}
     
 def save_settings(settings: dict) -> None:
-    with open(SETTINGS_FILENAME, mode='w', encoding='utf-8') as f:
-        f.write(settings['thermo']+'\n'+settings['voltage'])
+    with open(SETTINGS_FILENAME, mode='wb') as f:
+        f.write((settings['thermo']+'\n;;;\n'+settings['voltage']).encode())
+
+a = retrieve_settings()
 
 class Project(QMainWindow):
     '''
@@ -115,9 +119,9 @@ class Project(QMainWindow):
         print('Получение устройств...')
         resources = rm.list_resources()
         settings = retrieve_settings()
-        
-        try:
-            for r in resources:
+
+        for r in resources:
+            try:
                 device = rm.open_resource(r)
                 answer = device.query('*IDN?')
                 if answer == settings['thermo']:
@@ -126,10 +130,9 @@ class Project(QMainWindow):
                     self.voltage = device
                 else:
                     device.close()
-        except pyvisa.errors.VisaIOError:
-            self.print('VISA не найдена на компьютере')
-            self.ui.startButton.setChecked(False)
-            return
+            except pyvisa.errors.VisaIOError:
+                self.print('Один из портов выдал ошибку подключения.')
+                continue
         
         # Обработка ошибок, связанных с поиском устройств
         if self.thermo == None:
@@ -164,7 +167,7 @@ class Project(QMainWindow):
             self.print('[Ошибка] Деление на 0.')
             self.ui.startButton.setChecked(False)
             return
-        self.eps = 2000
+        self.eps = 1000
         self.volt_sp = np.array([])
         self.temp_sp = np.array([])
         self.resistance_sp = np.array([])
@@ -173,7 +176,7 @@ class Project(QMainWindow):
         self.graph, = self.canvas.axes.plot(self.temp_sp, self.resistance_sp, marker='o')
 
         self.drawing = True
-        print('Запуск измерений...')
+        self.print('Запуск измерений...')
         thread = threading.Thread(target=self.iterative_measuring, daemon=True)
         thread.start()
 
@@ -186,11 +189,18 @@ class Project(QMainWindow):
             if not self.drawing:
                 break
             self.thermo.write(f'pid4:temp:targ {i:3.3f}')
-            temp_now = float(self.thermo.query('meas:temp?'))
+
+            try:
+                temp_now = float(self.thermo.query('meas:temp?'))
+            except pyvisa.errors.VisaIOError:
+                pass
+            self.print('Ожидаю установления температуры...')
             while abs(temp_now - i) >= self.eps:
                 sleep(0.5)
-                temp_now = float(self.thermo.query('meas:temp?'))
-                print(temp_now)
+                try:
+                    temp_now = float(self.thermo.query('meas:temp?'))
+                except pyvisa.errors.VisaIOError:
+                    continue
 
             self.signal.emit()
             sleep(2)
@@ -200,14 +210,18 @@ class Project(QMainWindow):
         self.drawing = False
 
     def updating_graph(self):
-        temp_now = float(self.thermo.query('meas:temp?'))
-        volts = float(self.voltage.query('read?'))*1000
-        self.write_to_file(datetime.datetime.now(), (temp_now, volts))
-        self.temp_sp = np.append(self.temp_sp, temp_now)
-        self.volt_sp = np.append(self.volt_sp, volts)
-        resistance = volts / self.current_now
-        self.resistance_sp = np.append(self.resistance_sp, resistance)
-        self.print(f'[ДАННЫЕ] {volts:.3f} В, {temp_now:.3f} °К, {resistance:.3f} Ом')
+        try:
+            temp_now = float(self.thermo.query('meas:temp?'))
+            volts = float(self.voltage.query('read?'))*1000
+            self.temp_sp = np.append(self.temp_sp, temp_now)
+            self.volt_sp = np.append(self.volt_sp, volts)
+            resistance = volts / self.current_now
+            self.resistance_sp = np.append(self.resistance_sp, resistance)
+            self.write_to_file(datetime.datetime.now(), (f'{temp_now:.3f}', f'{volts:.3f}', f'{resistance:.3f}'))
+            self.print(f'[ДАННЫЕ] {volts:.3f} В, {temp_now:.3f} °К, {resistance:.3f} Ом')
+        except pyvisa.errors.VisaIOError:
+            self.ui.startButton.setChecked(False)
+            return
 
         # Рисование графика
         self.graph.set_data(self.temp_sp, self.resistance_sp)
