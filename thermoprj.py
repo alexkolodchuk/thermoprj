@@ -1,22 +1,59 @@
-import pyvisa
+#!/usr/bin/env python
+# -*- encoding: UTF8 -*-
+
+# This file is part of thermoprj.
+#
+# thermoprj is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# thermoprj is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with thermoprj. If not, see <https://www.gnu.org/licenses/>.
+
+import pyvisa, threading, datetime
 import numpy as np
 from time import sleep
 from sys import argv
 from PyQt5.QtWidgets import QMainWindow, QApplication
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import pyqtSignal, pyqtSlot
 from PyQt5.uic import loadUi
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-import threading
 
-# В этих переменных будут храниться адреса устройств
-THERMO_ADDRESS = 'ASRL4::INSTR'
-VOLTAGE_ADDRESS = 'Вольтметр 34401a'
+# Это - дефолтные названия устройств (то, что они возвращают на *IDN?)
+# В случае отсутствия файла настроек эти данные загружаются туда
+DEFAULT_THERMO_NAME = 'Cryotel,Model\s311\sTemperature\sController,SN00135,2.7.4\r\n'
+DEFAULT_VOLTAGE_NAME = 'Prist,V7-78/1,TW00011505,03.07-01-04'
+
+SETTINGS_FILENAME = 'thermoprj_settings.txt'
+DATA_FILENAME = 'thermoprj_data.csv'
+FSTRING_FOR_DATETIME = '%Y/%m/%d-%H:%M:%S.%f'
 
 rm = pyvisa.ResourceManager()
 app: QApplication = None
     
+# Работа с файлом настроек
+def retrieve_settings() -> dict:
+    try:
+        with open(SETTINGS_FILENAME, encoding='utf-8') as f:
+            text = f.read().split('\n')
+            return {'thermo': text[0], 'voltage': text[1]}
+    except (FileNotFoundError, KeyError, IndexError, UnicodeDecodeError):
+        with open(SETTINGS_FILENAME, mode='w', encoding='utf-8') as f:
+            f.write(DEFAULT_THERMO_NAME+'\n'+DEFAULT_VOLTAGE_NAME)
+        return {'thermo': DEFAULT_THERMO_NAME, 'voltage': DEFAULT_VOLTAGE_NAME}
+    
+def save_settings(settings: dict) -> None:
+    with open(SETTINGS_FILENAME, mode='w', encoding='utf-8') as f:
+        f.write(settings['thermo']+'\n'+settings['voltage'])
+
 class Project(QMainWindow):
     '''
     Главное окно программы.
@@ -25,9 +62,10 @@ class Project(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.file = open('data.txt', 'w')
+        self.file = open(DATA_FILENAME, mode='a+', encoding='utf-8')
+        
         self.ui = loadUi('thermoprj.ui', self)
-        self.ui.settingsButton.clicked.connect(self.open_settings)
+        self.ui.settingsButton.clicked.connect(self.open_settings_window)
         self.ui.startButton.toggled.connect(self.start_or_stop)
         
         # Создание и добавление виджетов Matplotlib
@@ -38,16 +76,21 @@ class Project(QMainWindow):
         # Флаг для кнопки "Старт"
         self.drawing = False
     
-    def print(self, string):
+    def print(self, string: object) -> None:
         '''Имплементация отладочного вывода.'''
         print(string)
         self.ui.output.setText(string)
     
-    def open_settings(self):
-        settings = SettingsWindow()
+    def open_settings_window(self) -> None:
+        settings = SettingsWindow(self)
         settings.show()
+        self.ui.settingsButton.setEnabled(False)
+        
+    def write_to_file(self, time: datetime.datetime, data) -> None:
+        '''Добавление полученного вывода к файлу.'''
+        self.file.write(time.strftime(FSTRING_FOR_DATETIME)+';'+';'.join(data)+'\n')
 
-    def start_or_stop(self, checked):
+    def start_or_stop(self, checked: bool) -> None:
         '''Включение/выключение отрисовки графика ρ(Т).'''
         if checked:
             self.start()
@@ -57,22 +100,44 @@ class Project(QMainWindow):
 
     @pyqtSlot()
     def start(self):
+        # Подключение сигнала к слоту
         try:
-            print('connecting')
+            print('Подключение к графику...')
             self.signal.connect(self.updating_graph)
         except Exception as e:
             print(e)
             return
 
-        # Подключение устройств
+        # Подключение всех устройств и сопоставление их ответов на *IDN? с заданными названиями
+        self.thermo = None
+        self.voltage = None
+        
+        print('Получение устройств...')
+        resources = rm.list_resources()
+        settings = retrieve_settings()
+        
         try:
-            print('connecting devices')
-            self.voltage = rm.open_resource(VOLTAGE_ADDRESS)
-
-            self.thermo = rm.open_resource(THERMO_ADDRESS)
-        except (pyvisa.errors.VisaIOError, AttributeError):
-            self.print('[Ошибка] Неверно указаны адреса инструментов. \
-Настройте их в "Настройка устройств".')
+            for r in resources:
+                device = rm.open_resource(r)
+                answer = device.query('*IDN?')
+                if answer == settings['thermo']:
+                    self.thermo = device
+                elif answer == settings['voltage']:
+                    self.voltage = device
+                else:
+                    device.close()
+        except pyvisa.errors.VisaIOError:
+            self.print('VISA не найдена на компьютере')
+            self.ui.startButton.setChecked(False)
+            return
+        
+        # Обработка ошибок, связанных с поиском устройств
+        if self.thermo == None:
+            self.print('Термоконтроллер не найден')
+            self.ui.startButton.setChecked(False)
+            return
+        if self.voltage == None:
+            self.print('Вольтметр не найден')
             self.ui.startButton.setChecked(False)
             return
 
@@ -105,10 +170,10 @@ class Project(QMainWindow):
         self.resistance_sp = np.array([])
 
         # Создание пустого графика
-        self.graph, = self.canvas.axes.plot(self.temp_sp, self.resistance_sp)
+        self.graph, = self.canvas.axes.plot(self.temp_sp, self.resistance_sp, marker='o')
 
         self.drawing = True
-        print('starting thread')
+        print('Запуск измерений...')
         thread = threading.Thread(target=self.iterative_measuring, daemon=True)
         thread.start()
 
@@ -127,7 +192,6 @@ class Project(QMainWindow):
                 temp_now = float(self.thermo.query('meas:temp?'))
                 print(temp_now)
 
-            print('emitting signal')
             self.signal.emit()
             sleep(2)
 
@@ -138,13 +202,13 @@ class Project(QMainWindow):
     def updating_graph(self):
         temp_now = float(self.thermo.query('meas:temp?'))
         volts = float(self.voltage.query('read?'))*1000
+        self.write_to_file(datetime.datetime.now(), (temp_now, volts))
         self.temp_sp = np.append(self.temp_sp, temp_now)
         self.volt_sp = np.append(self.volt_sp, volts)
         resistance = volts / self.current_now
         self.resistance_sp = np.append(self.resistance_sp, resistance)
         self.print(f'[ДАННЫЕ] {volts:.3f} В, {temp_now:.3f} °К, {resistance:.3f} Ом')
 
-        print('drawing')
         # Рисование графика
         self.graph.set_data(self.temp_sp, self.resistance_sp)
         self.canvas.draw()
@@ -155,7 +219,10 @@ class Project(QMainWindow):
         self.canvas.axes.set_ylim(min(self.resistance_sp) - ysize * 0.1, max(self.resistance_sp) + ysize * 0.1)
 
     def __del__(self):
+        self.print('Закрытие файла с данными...')
+        self.drawing = False
         self.file.close()
+
 
 class MplCanvas(FigureCanvasQTAgg):
     '''Собственный холст Matplotlib.'''
@@ -164,28 +231,26 @@ class MplCanvas(FigureCanvasQTAgg):
         self.axes = fig.add_subplot(111)
         super().__init__(fig)
 
+
 class SettingsWindow(QMainWindow):
     '''Окно настройки устройств.'''
-    def __init__(self):
+    def __init__(self, mainWindow: Project):
         super().__init__()
         self.ui = loadUi('settings.ui', self)
-        self.ui.updateButton.clicked.connect(self.update_lists)
-        self.ui.saveButton.clicked.connect(self.save_changes)
+        self.ui.saveButton.clicked.connect(self.save_settings)
+                
+        self.settings: dict = retrieve_settings()
+        self.ui.thermo.setText(self.settings['thermo'])
+        self.ui.voltage.setText(self.settings['voltage'])
         
-    def update_lists(self):
-        app.setOverrideCursor(Qt.CursorShape.BusyCursor)
-        resources = list(rm.list_resources())
-        if len(resources)==0: resources.append('Устройств не найдено :(')
-        self.ui.resources1.clear()
-        self.ui.resources1.addItems(resources)
-        self.ui.resources2.clear()
-        self.ui.resources2.addItems(resources)
-        app.setOverrideCursor(Qt.CursorShape.ArrowCursor)
-    
-    def save_changes(self):
-        global THERMO_ADDRESS, VOLTAGE_ADDRESS
-        THERMO_ADDRESS = self.ui.resources1.currentText()
-        VOLTAGE_ADDRESS = self.ui.resources2.currentText()
+        self.mainWindow = mainWindow
+        self.mainWindow.print('Настройки загружены')
+        
+    def save_settings(self):
+        self.settings['thermo'] = self.ui.thermo.text()
+        self.settings['voltage'] = self.ui.voltage.text()
+        save_settings(self.settings)
+        self.mainWindow.ui.settingsButton.setEnabled(True)
         self.close()
 
 if __name__ == '__main__':
